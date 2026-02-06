@@ -65,6 +65,7 @@ public class TicketDetailCacheServiceRefactor {
                 return getTicketDetailDistributedCache(ticketId);
             }
         }
+        log.info("LOCAL CACHE NULL ->> GET DATA FROM DISTRIBUTED CACHE!!!");
         return getTicketDetailDistributedCache(ticketId);
     }
 
@@ -76,7 +77,7 @@ public class TicketDetailCacheServiceRefactor {
         TicketDetailCache ticketDetailCache = redisInfrasService.getObject(genEventItemKey(ticketId), TicketDetailCache.class);
         if (ticketDetailCache == null) {
             // CALL DB
-            log.info("GET TICKET FROM DISTRIBUTED LOCK");
+            log.info("GET TICKET FROM DATABASE");
             ticketDetailCache = getTicketDetailFromDatabase(ticketId);
         }
         // 2 - PUT DATA INTO LOCAL CACHE
@@ -90,30 +91,50 @@ public class TicketDetailCacheServiceRefactor {
      */
     public TicketDetailCache getTicketDetailFromDatabase(Long ticketId) {
         RedisDistributedLocker locker = redisDistributedService.getDistributedLock(genEventItemKeyLock(ticketId));
+        boolean isLock = false;
         try {
             // 1 - tao lock
-            boolean isLock = locker.tryLock(1, 5, TimeUnit.SECONDS);
+            isLock = locker.tryLock(1, 5, TimeUnit.SECONDS);
             // Lưu ý: dù có lấy lock thành công hay không vẫn phải unlock bằng mọi giá
+            int retry = 0;
+            int maxRetry = 5;
+            int wait = 20;
             if (!isLock) {
-                return null;
-            }
+                // retry doc cache
+                while (retry < maxRetry) {
+                    Thread.sleep(wait);
+                    TicketDetailCache ticketDetailCache =
+                            redisInfrasService.getObject(genEventItemKey(ticketId), TicketDetailCache.class);
 
-            // GET CACHE
+                    if (ticketDetailCache != null) {
+                        return ticketDetailCache;
+                    }
+
+                    wait *= 2; // 20 → 40 → 80 → 160 → 320
+                    retry++;
+                }
+                throw new RuntimeException("System busy, please retry!!!");
+            }
+                // GET CACHE
             TicketDetailCache ticketDetailCache = redisInfrasService.getObject(genEventItemKey(ticketId), TicketDetailCache.class);
+
             // 2. YES
             if (ticketDetailCache != null) {
                 return ticketDetailCache;
             }
 
             TicketDetail ticketDetail = ticketDetailDomainService.getTicketDetailById(ticketId);
-            ticketDetailCache = new TicketDetailCache().withClone(ticketDetail).withVersion(System.currentTimeMillis());
+            log.info("FROM DBS ->> {}, {}", ticketId, ticketDetail);
+            ticketDetailCache = new TicketDetailCache().withClone(ticketDetail);
             // SET data to distributed cache
             redisInfrasService.setObject(genEventItemKey(ticketId), ticketDetailCache);
             return ticketDetailCache;
         } catch (Exception e) {
             throw  new RuntimeException(e);
         } finally {
-            locker.unlock();
+            if (isLock) {
+                locker.unlock();
+            }
         }
     }
 

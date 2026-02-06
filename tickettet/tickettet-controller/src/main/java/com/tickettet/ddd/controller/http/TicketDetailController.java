@@ -14,14 +14,6 @@ public class TicketDetailController {
     // CALL service Application
     private final TicketDetailAppService ticketDetailAppService;
 
-    @GetMapping("/{ticketId}/detail/{detailId}")
-    public ResultMessage<TicketDetailDTO> getTicketDetail(
-            @PathVariable("ticketId") Long ticketId,
-            @PathVariable("detailId") Long detailId,
-            @RequestParam(name = "version", required = false) Long version
-    ) {
-        return ResultUtil.data(ticketDetailAppService.getTicketDetailById(detailId, version));
-    }
 
     /**
      * order by User
@@ -35,5 +27,14 @@ public class TicketDetailController {
             @PathVariable("detailId") Long detailId
     ) {
         return ticketDetailAppService.orderTicketByUser(detailId);
+    }
+
+    @GetMapping("/{ticketId}/detail/{detailId}")
+    public ResultMessage<TicketDetailDTO> getTicketDetail(
+            @PathVariable("ticketId") Long ticketId,
+            @PathVariable("detailId") Long detailId,
+            @RequestParam(name = "version", required = false) Long version
+    ) {
+        return ResultUtil.data(ticketDetailAppService.getTicketDetailById(detailId, version));
     }
 }
