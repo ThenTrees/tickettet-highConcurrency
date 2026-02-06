@@ -1,7 +1,7 @@
 version: '3.2'
 
 networks:
-  pre-event-member-mysql:
+  pre-event-network:
     driver: bridge
 
 services:
@@ -23,7 +23,7 @@ services:
     ports:
       - "3316:3306"
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   #Redis
   redis:
@@ -33,7 +33,7 @@ services:
     ports:
       - "6319:6379"
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   prometheus:
     image: prom/prometheus:latest
@@ -53,7 +53,7 @@ services:
     ports:
       - "9090:9090"
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   grafana:
     image: grafana/grafana
@@ -72,7 +72,7 @@ services:
     ports:
       - "3000:3000"
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   node-exporter:
     image: prom/node-exporter:latest
@@ -90,7 +90,7 @@ services:
     ports:
       - "9100:9100"
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   mysqld-exporter:
     image: prom/mysqld-exporter
@@ -115,7 +115,7 @@ services:
     depends_on:
       - mysql
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   redis-exporter:
     image: oliver006/redis_exporter
@@ -123,7 +123,7 @@ services:
     ports:
       - 9121:9121
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
   postgres:
     image: postgres:16
@@ -138,7 +138,7 @@ services:
     ports:
       - "5434:5432"
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
 
 
   keycloak:
@@ -164,6 +164,48 @@ services:
     depends_on:
       - postgres
     networks:
-      - pre-event-member-mysql
+      - pre-event-network
+
+  elasticsearch:
+    image: elasticsearch:8.13.4
+    container_name: pre-event-elastichsearch
+    volumes:
+      - ./elk/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      discovery.type: single-node
+    networks:
+      - pre-event-network
+
+  logstash:
+    image: logstash:8.13.4
+    container_name: pre-event-logstash
+    volumes:
+      - ./elk/logstash.yml:/usr/share/logstash/config/logstash.yml
+      - ./elk/pipeline:/usr/share/logstash/pipeline
+    ports:
+      - "5044:5044"
+      - "5033:5000/tcp"
+      - "5022:5000/udp"
+      - "9600:9600"
+    environment:
+      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+    networks:
+      - pre-event-network
+
+  kibana:
+    image: kibana:8.13.4
+    container_name: pre-event-kibana
+    volumes:
+      - ./elk/kibana.yml:/usr/share/kibana/config/kibana.yml
+    ports:
+      - "5601:5601"
+    networks:
+      - pre-event-network
+    depends_on:
+      - elasticsearch
 volumes:
   postgres_data:
